@@ -124,8 +124,8 @@ Resources:
                 Action:
                   - ses:SendRawEmail
                 Resource: "*"  # You can restrict this to specific resources if needed
-        ManagedPolicyArns:  # Add the managed policy for CloudWatch logs
-          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      ManagedPolicyArns:  # Add the managed policy for CloudWatch logs
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   MyLambdaFunction:
     Type: AWS::Lambda::Function
