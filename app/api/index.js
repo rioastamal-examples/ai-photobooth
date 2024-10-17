@@ -70,7 +70,7 @@ const main = async (event) => {
 
             // Send the image via email
             const fileName = metadata.image_key.split('/').pop();
-            await sendEmailWithImage(fileName, finalImageBase64, metadata.sk);
+            await sendEmailWithImage(fileName, finalImageBase64, metadata.sk, metadata.theme);
             
             // Delete queue
             if (DELETE_SQS_QUEUE === 'yes') {
@@ -259,17 +259,21 @@ const getImageFormat = (key) => {
 };
 
 // Function to send email with image attachment
-const sendEmailWithImage = async (imageName, imageData, emailTo) => {
+const sendEmailWithImage = async (imageName, imageData, emailTo, theme) => {
     const boundary = "boundary123";
     const isoDate = new Date().toISOString();
     const subject = `Your AI Image is Ready - ${isoDate}`;
+    const newFilename = imageName.replace(/\.jpeg$/, '.png').replace(/\.jpg$/, '.png');
     const emailContent = `Halo,
 
 Terima kasih telah menggunakan AI Photobooth Image Generator. 
 Hasil foto dapat kamu download di attachment yang ada di email ini.
 
 Nama file:
-${imageName}
+${newFilename}
+
+Tema:
+${theme}
 
 Salam,
 Tim AI Photobooth
@@ -287,7 +291,7 @@ ${emailContent}
 --${boundary}
 Content-Type: image/jpeg
 Content-Transfer-Encoding: base64
-Content-Disposition: attachment; filename="${imageName}"
+Content-Disposition: attachment; filename="${newFilename}"
 
 ${imageData.toString('base64')}
 --${boundary}--`;
