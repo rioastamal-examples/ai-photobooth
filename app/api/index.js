@@ -1,4 +1,3 @@
-// Content of this file is duplicated at iac/ai-photobooth.yaml
 // Import necessary AWS SDK clients
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
