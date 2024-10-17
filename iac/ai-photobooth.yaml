@@ -1,0 +1,179 @@
+Parameters:
+  ImageId:
+    Description: The ID of the AMI to use for the instance
+    Type: String
+    Default: ami-0a4c2bb1787bdfe4f  # Ubuntu Deep Learning AMI
+
+  RootVolumeSize:
+    Description: Size of the root volume in GB
+    Type: Number
+    Default: 84  # Default to 84GB
+
+  InstanceType:
+    Description: The EC2 instance type
+    Type: String
+    Default: g4dn.xlarge  # Default instance type
+
+  KeyName:
+    Description: The name of the EC2 Key Pair to enable SSH access to the instance
+    Type: String
+
+  VPCId:
+    Description: The ID of the VPC in which to launch the instance
+    Type: String
+
+  EmailFrom:
+    Description: The email address to send from
+    Type: String
+
+Resources:
+  MySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group to allow SSH and HTTP access
+      VpcId: !Ref VPCId  # Ensure you specify the VPC ID
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0  # Allow SSH from anywhere
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0  # Allow HTTP from anywhere
+
+  SdxlInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      # Ubuntu Deep Learning AMI PyTorch 2.4
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            Encrypted: false
+            DeleteOnTermination: true
+            VolumeSize: !Ref RootVolumeSize
+            VolumeType: gp3
+      SecurityGroupIds:
+        - !Ref MySecurityGroup  # Attach the security group to the instance
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}"
+
+  MyS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}"
+
+  MyDynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}"
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST    # Use on-demand capacity mode
+
+  MySQSQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}"
+      VisibilityTimeout: 120  # Set visibility timeout in seconds
+      
+  MyLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaAIPhotobooth
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt MySQSQueue.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Scan   # Add more actions if necessary
+                  - dynamodb:Query  # Add more actions if necessary
+                Resource: !GetAtt MyDynamoDBTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${MyS3Bucket}/*"  # Adjust if necessary
+              - Effect: Allow
+                Action:
+                  - ses:SendRawEmail
+                Resource: "*"  # You can restrict this to specific resources if needed
+        ManagedPolicyArns:  # Add the managed policy for CloudWatch logs
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}"
+      Handler: index.handler  # Adjust this as per your Lambda code
+      Role: !GetAtt MyLambdaExecutionRole.Arn
+      MemorySize: 1024
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+              // Your lambda logic here
+              return {
+                  statusCode: 200,
+                  body: JSON.stringify('Hello from Lambda!'),
+              };
+          };
+      Runtime: nodejs20.x  # Updated runtime
+      Timeout: 90  # Timeout in seconds
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref MyDynamoDBTable
+          S3_BUCKET_NAME: !Ref MyS3Bucket
+          SQS_QUEUE_URL: !Ref MySQSQueue
+          DELETE_SQS_QUEUE: 'yes'
+          EMAIL_FROM: !Ref EmailFrom
+
+  MySQSTrigger:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 10
+      EventSourceArn: !GetAtt MySQSQueue.Arn
+      FunctionName: !GetAtt MyLambdaFunction.Arn
+      Enabled: true
+
+Outputs:
+  InstanceId:
+    Description: Stable Diffusion API Instance
+    Value: !Ref SdxlInstance
+    
+  S3Bucket:
+    Description: Stable Diffusion API Bucket
+    Value: !Ref MyS3Bucket
+    
+  DynamoDBTableName:
+    Description: Store the metadata of each request
+    Value: !Ref MyDynamoDBTable
+    
+  SQSQueueUrl:
+    Description: The URL of the queue
+    Value: !Ref MySQSQueue
