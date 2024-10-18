@@ -74,9 +74,12 @@ create_stack() {
 
     update_lambda_function $STACK_NAME-$RANDOM_SUFFIX
     
-[3] Install and run the Stable Diffusion WebUI Forge
+[3] Install and run the Stable Diffusion WebUI Forge:
 
-    
+    run_sdxl_webui_api $STACK_NAME-$RANDOM_SUFFIX
+
+    It may take awhile for the 1st run since it will install many packages. 
+    You may need to stop and restart the server after finish the 1st run.
 "
 }
 
