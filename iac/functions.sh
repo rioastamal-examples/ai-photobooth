@@ -65,13 +65,18 @@ create_stack() {
                  ParameterKey=EmailFrom,ParameterValue="$EMAIL"
 
   printf "
--> Run following command to monitor the status of the stack:
+[1] Run following command to monitor the status of the stack:
 
     get_stack_status $STACK_NAME-$RANDOM_SUFFIX
-    - or
-    list_stacks
-    - or
-    list_stacks_active
+    - or list_stacks - or list_stacks_active
+    
+[2] Once the status is CREATE_COMPLETE update the Lambda function:
+
+    update_lambda_function $STACK_NAME-$RANDOM_SUFFIX
+    
+[3] Install and run the Stable Diffusion WebUI Forge
+
+    
 "
 }
 
@@ -148,4 +153,15 @@ update_lambda_function() {
         aws lambda update-function-configuration \
           --function-name "$FUNC_NAME" --environment file://<(cat)
 
+}
+
+run_sdxl_webui_api() {
+  local STACK_NAME="$1"
+  [ -z "$STACK_NAME" ] && {
+    printf "Missing 1st arg: Stack name" >&2
+    return 1
+  }
+
+  local API_HOST="$( get_instance_public_ip $STACK_NAME )"
+  cat iac/user-data.sh | ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ubuntu@$API_HOST bash
 }
