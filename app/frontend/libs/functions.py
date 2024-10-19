@@ -1,6 +1,7 @@
 import os
 import boto3
 from datetime import datetime
+import urllib.parse
 
 # Environment variables configuration
 BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
@@ -20,6 +21,10 @@ sqs_client = boto3.client('sqs')
 dynamodb_client = boto3.resource('dynamodb')
 table = dynamodb_client.Table(DYNAMODB_TABLE_NAME)
 
+# Get the current AWS region
+session = boto3.Session()
+current_region = session.region_name
+
 def upload_image_to_s3(image_data, image_name):
     """Upload image to S3."""
 
@@ -30,7 +35,10 @@ def upload_image_to_s3(image_data, image_name):
             Body=image_data,
             ContentType='image/jpeg'  # Adjust if using other formats
         )
-        return f"Image uploaded to S3 as {image_name}"
+
+        encoded_image_key = urllib.parse.quote(image_name)
+        s3_url = f"https://{current_region}.console.aws.amazon.com/s3/object/{BUCKET_NAME}?region={current_region}&bucketType=general&prefix={encoded_image_key}"
+        return f"Image uploaded to S3 as {image_name}. S3 URL: {s3_url}"
     except Exception as e:
         return f"Error uploading image: {e}"
 
@@ -52,7 +60,10 @@ def write_image_metadata_to_dynamodb(metadata):
                 'created': iso_string
             }
         )
-        return f"Metadata for {metadata['s3_key']} written to DynamoDB."
+        encoded_pk = urllib.parse.quote(metadata['id'])
+        encoded_sk = urllib.parse.quote(metadata['email']);
+        item_url = f"https://{current_region}.console.aws.amazon.com/dynamodbv2/home?region={current_region}#edit-item?itemMode=2&pk={encoded_pk}&route=ROUTE_ITEM_EXPLORER&sk={encoded_sk}&table={DYNAMODB_TABLE_NAME}"
+        return f"Metadata for {metadata['s3_key']} written to DynamoDB. Item URL: {item_url}"
     except Exception as e:
         return f"Error writing metadata to DynamoDB: {e}"
 
